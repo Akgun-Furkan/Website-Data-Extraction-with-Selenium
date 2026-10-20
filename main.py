@@ -1,68 +1,51 @@
-import openpyxl
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-import pandas as pd
-from openpyxl import load_workbook
 from time import sleep
-from webdriver_manager.chrome import ChromeDriverManager  # Yeni eklendi
-from selenium.webdriver.chrome.service import Service  # Yeni eklendi
+import pandas as pd
+import undetected_chromedriver as uc  #tarayıcıyı bot algılamasını yakalamasın diye standart webdriver yerine bunu kullanıyoruz
+from selenium.webdriver.common.by import By
 
-
-# Chrome ayarları
-chromOptions = Options()
-chromOptions.add_argument("--headless")
-chromOptions.add_argument("--no-sandbox")
-chromOptions.add_argument("start-maximized")
-
-
-# Driver oluşturma
-service = Service(r"\chromedriver.exe")
-driver = webdriver.Chrome(service=service, options=chromOptions)
+#tarayıcıyı bot algılamasını yakalamasın diye
+driver = uc.Chrome(use_subprocess=True)
 driver.delete_all_cookies()
 
-# URL'yi aç
-driver.get("https://www.sahibinden.com/kiralik-daire/istanbul-atasehir?viewType=Classic&pagingSize=50&address_region=2")
-driver.implicitly_wait(10)
-
 tum_ilanlar = []
-sayfa = 20
+TOPLAM_SAYFA = 30
 
 try:
-  for sayfa in range(1, sayfa + 1):
-    # Sahibinden'de sayfalama yapısı genellikle ?pagingOffset=50 şeklindedir
-    # 1. sayfa için offset 0, 2. sayfa için 50, 3. sayfa için 100...
-    offset = (sayfa - 1) * 50
+  for sayfa_idx in range(1, TOPLAM_SAYFA + 1):
+    offset = (sayfa_idx - 1) * 50
     url = f"https://www.sahibinden.com/kiralik-daire/istanbul-atasehir?pagingOffset={offset}&viewType=Classic&pagingSize=50&address_region=2"
 
-    print(f"{sayfa}. sayfa yükleniyor...")
+    print(f"{sayfa_idx}. sayfa yükleniyor...")
     driver.get(url)
 
-    # Sayfanın yüklenmesi için güvenli bir bekleme süresi
-    sleep(4)
-
-    # İlan listesindeki satırları seçme (Sahibinden sınıf isimleri güncellenebilir,
-    # tarayıcıda F12 ile inceleyerek class adını teyit edin)
+    # ÖNEMLİ: İlk açılışta veya sayfa değişimlerinde bot koruması çıkarsa
+    # terminale bilgi verelim ve manuel geçiş için  süre tanıyalım
+    sleep(5)
+    #Selenium CSS Selectors
     ilanlar = driver.find_elements(By.CSS_SELECTOR, "tr.searchResultsItem")
 
     if not ilanlar:
       print(
-          f"{sayfa}. sayfada ilan bulunamadı veya bot korumasına takılmış"
-          " olabilirsiniz."
+          f"\n[!] {sayfa_idx}. sayfada ilanlar alınamadı."
+          " Bot korumasına (Cloudflare/DataDome) takılmış olabilirsiniz."
       )
-      break
+      print(
+          "Lütfen açılan tarayıcı penceresinden varsa robot doğrulamasını"
+          " (CAPTCHA) elinizle çözün."
+      )
+      input(
+          "Doğrulamayı yaptıktan sonra devam etmek için ENTER tuşuna"
+          " basın..."
+      )
+      #enter bastıktan sonra tekrar ilanları yakalamayı dene
+      #bot koruması için
+      ilanlar = driver.find_elements(By.CSS_SELECTOR, "tr.searchResultsItem")
 
     for ilan in ilanlar:
       try:
-        # Örnek seçiciler (Sitenin güncel HTML yapısına göre class'lar değişebilir)
-        # Fiyat
         fiyat = ilan.find_element(
             By.CSS_SELECTOR, "td.searchResultsPriceValue"
         ).text.strip()
-
-        # m² (Brüt), Oda Sayısı, Bina Yaşı vb. özellikler genellikle hücreler (td) içindedir
-        # Sütun sırasına göre verileri çekebilirsiniz:
         detaylar = ilan.find_elements(By.CSS_SELECTOR, "td.searchResultsAttribute")
 
         m_brut = detaylar[0].text.strip() if len(detaylar) > 0 else ""
@@ -70,12 +53,8 @@ try:
         bina_yasi = detaylar[2].text.strip() if len(detaylar) > 2 else ""
         bulundugu_kat = detaylar[3].text.strip() if len(detaylar) > 3 else ""
 
-        # Semt / Mahalle ve İlan Tarihi
         lokasyon = ilan.find_element(
             By.CSS_SELECTOR, "td.searchResultsLocationValue"
-        ).text.strip()
-        tarih = ilan.find_element(
-            By.CSS_SELECTOR, "td.searchResultsDateValue"
         ).text.strip()
 
         tum_ilanlar.append({
@@ -85,22 +64,17 @@ try:
             "Bina Yaşı": bina_yasi,
             "Bulunduğu Kat": bulundugu_kat,
             "Semt / Mahalle": lokasyon,
-            "İlan Tarihi": tarih,
-        })
-      except Exception as e:
-        # Tek bir ilandaki veri çekme hatası tüm döngüyü patlatmasın
+                    })
+      except Exception:
         continue
 
-    # Her sayfa arasında IP ban riskine karşı 3-6 saniye mola verin
-    sleep(5)
+    #sayfalar arası geçişte bot olduğumuz anlaşılmasın diye
+    #sisteme insanî bir ritim vermek için rastgele bekleme
+    sleep(6)
 
 finally:
   driver.quit()
 
-# Verileri Pandas ile Excel'e aktarma
 df = pd.DataFrame(tum_ilanlar)
 df.to_excel("atasehir_kiralik_daireler.xlsx", index=False)
-print(
-    f"İşlem tamam! Toplam {len(tum_ilanlar)} adet ilan Excel dosyasına"
-    " kaydedildi."
-)
+print(f"Toplam {len(tum_ilanlar)} ilan kaydedildi.")
