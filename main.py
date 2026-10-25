@@ -8,7 +8,7 @@ driver = uc.Chrome(use_subprocess=True)
 driver.delete_all_cookies()
 
 tum_ilanlar = []
-TOPLAM_SAYFA = 30
+TOPLAM_SAYFA = 20
 
 try:
   for sayfa_idx in range(1, TOPLAM_SAYFA + 1):
@@ -46,13 +46,10 @@ try:
         fiyat = ilan.find_element(
             By.CSS_SELECTOR, "td.searchResultsPriceValue"
         ).text.strip()
-        detaylar = ilan.find_elements(By.CSS_SELECTOR, "td.searchResultsAttribute")
+        detaylar = ilan.find_elements(By.CSS_SELECTOR, "td.searchResultsAttributeValue")
 
         m_brut = detaylar[0].text.strip() if len(detaylar) > 0 else ""
         oda_sayisi = detaylar[1].text.strip() if len(detaylar) > 1 else ""
-        bina_yasi = detaylar[2].text.strip() if len(detaylar) > 2 else ""
-        bulundugu_kat = detaylar[3].text.strip() if len(detaylar) > 3 else ""
-
         lokasyon = ilan.find_element(
             By.CSS_SELECTOR, "td.searchResultsLocationValue"
         ).text.strip()
@@ -61,8 +58,6 @@ try:
             "Fiyat": fiyat,
             "m² (Brüt)": m_brut,
             "Oda Sayısı": oda_sayisi,
-            "Bina Yaşı": bina_yasi,
-            "Bulunduğu Kat": bulundugu_kat,
             "Semt / Mahalle": lokasyon,
                     })
       except Exception:
